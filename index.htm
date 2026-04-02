@@ -13,32 +13,34 @@
       body { margin: 0; overflow: hidden; }
       #ar-overlay {
         position: absolute;
-        top: 10px;
-        left: 10px;
+        top: 15px;
+        left: 15px;
         color: white;
         font-family: Arial, sans-serif;
-        background: rgba(0,0,0,0.75);
-        padding: 15px;
+        background: rgba(0,0,0,0.8);
+        padding: 15px 18px;
         border-radius: 10px;
         pointer-events: none;
         z-index: 100;
-        max-width: 280px;
+        line-height: 1.4;
       }
     </style>
   </head>
   <body>
     <div id="ar-overlay">
-      <p><strong>Aponte para o chão ou mesa bem iluminada</strong><br><br>
-         Toque na tela → Colocar Coca-Cola<br>
-         Pinch → Zoom<br>
-         Dois dedos → Rotação<br>
-         Um dedo arrastando → Mover</p>
+      <p><strong>Instruções:</strong><br>
+         1. Aponte para o chão ou mesa bem iluminada<br>
+         2. <strong>Toque na tela</strong> para colocar a Coca-Cola<br>
+         3. Pinch → Zoom<br>
+         4. Dois dedos girando → Rotação<br>
+         5. Um dedo arrastando → Mover</p>
     </div>
 
     <a-scene
       embedded
       arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best; videoTexture: true;"
       gesture-detector
+      renderer="logarithmicDepthBuffer: true;"
     >
       <a-assets>
         <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio>
@@ -47,12 +49,12 @@
       <!-- Camera -->
       <a-entity camera></a-entity>
 
-      <!-- Cursor de mira (círculo no centro) -->
+      <!-- Cursor de mira (círculo no centro da tela) -->
       <a-entity
         id="reticle"
-        geometry="primitive: ring; radiusInner: 0.07; radiusOuter: 0.09;"
-        material="color: #00ffff; shader: flat; transparent: true; opacity: 0.8;"
-        position="0 0 -0.6"
+        geometry="primitive: ring; radiusInner: 0.06; radiusOuter: 0.085;"
+        material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.85;"
+        position="0 0 -0.5"
         rotation="-90 0 0"
         visible="true"
       ></a-entity>
@@ -77,16 +79,16 @@
       const reticle = document.getElementById('reticle');
 
       scene.addEventListener('loaded', () => {
-        console.log('✅ AR carregado - Aponte para o chão e toque na tela');
+        console.log('✅ AR carregado. Aponte para o chão e toque na tela para colocar.');
       });
 
-      // Toque na tela = coloca o modelo na posição atual do cursor
-      scene.addEventListener('click', () => {
+      // Ao tocar na tela → coloca o modelo na posição do cursor
+      scene.addEventListener('click', (evt) => {
         if (model.getAttribute('visible') === 'false') {
-          const reticlePos = reticle.getAttribute('position');
-          model.setAttribute('position', `${reticlePos.x} ${reticlePos.y} ${reticlePos.z}`);
+          const pos = reticle.getAttribute('position');
+          model.setAttribute('position', `${pos.x} ${pos.y + 0.02} ${pos.z}`); // +0.02 para não afundar
           model.setAttribute('visible', 'true');
-          console.log('✅ Modelo colocado na superfície!');
+          console.log('✅ Modelo colocado!');
         }
       });
 
