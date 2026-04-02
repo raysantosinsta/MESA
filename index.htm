@@ -7,13 +7,8 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
 
-    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
-    <!-- AR.js (location + markerless) -->
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-
-    <!-- Gesture support (pinch zoom + rotate) -->
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
@@ -21,29 +16,21 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { overflow: hidden; background: #000; }
 
-      #overlay {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        pointer-events: none;
-        z-index: 10;
-      }
-
       #hint {
         position: fixed;
         bottom: 32px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0,0,0,0.55);
+        background: rgba(0,0,0,0.6);
         color: #fff;
         font-family: Arial, sans-serif;
         font-size: 14px;
-        padding: 10px 20px;
+        padding: 10px 22px;
         border-radius: 24px;
         text-align: center;
         pointer-events: none;
         z-index: 20;
-        transition: opacity 0.5s;
+        white-space: nowrap;
       }
 
       #reticle {
@@ -65,12 +52,45 @@
         background: #fff;
         border-radius: 50%;
       }
+
+      /* Botões verticais */
+      #vertical-controls {
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 20;
+      }
+      #vertical-controls button {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        font-size: 24px;
+        cursor: pointer;
+        touch-action: manipulation;
+        user-select: none;
+      }
+      #vertical-controls button:active {
+        background: rgba(255,255,255,0.3);
+      }
     </style>
   </head>
   <body>
 
-    <div id="hint">Aponte a câmera para uma superfície plana e toque para posicionar</div>
+    <div id="hint">Toque na tela para posicionar o modelo</div>
     <div id="reticle"></div>
+
+    <!-- Controles verticais -->
+    <div id="vertical-controls">
+      <button id="btn-up">▲</button>
+      <button id="btn-down">▼</button>
+    </div>
 
     <a-scene
       id="scene"
@@ -84,11 +104,10 @@
         <a-asset-item id="coca-model" src="coca.glb"></a-asset-item>
       </a-assets>
 
-      <!-- Modelo posicionado à frente da câmera inicialmente -->
       <a-entity
         id="coca"
         gltf-model="#coca-model"
-        scale="0.1 0.1 0.1"
+        scale="0.3 0.3 0.3"
         position="0 -0.5 -1.5"
         rotation="0 0 0"
         gesture-handler="enabled: true"
@@ -99,76 +118,137 @@
     </a-scene>
 
     <script>
-      AFRAME.registerComponent('tap-to-place', {
+      AFRAME.registerComponent('drag-place', {
         init: function () {
-          this.model = document.getElementById('coca');
-          this.camera = document.querySelector('[camera]');
-          this.placed = false;
-          this.hint = document.getElementById('hint');
+          this.model       = document.getElementById('coca');
+          this.camera      = document.querySelector('[camera]');
+          this.hint        = document.getElementById('hint');
 
-          // Escuta toque/clique na cena
-          document.addEventListener('click', this.onTap.bind(this));
-          document.addEventListener('touchend', this.onTap.bind(this));
+          // Estado do drag
+          this.dragging    = false;
+          this.touchId     = null;          // identifier do toque ativo
+          this.lastX       = 0;
+          this.lastY       = 0;
+
+          // Posição atual do modelo (mantida em JS para evitar leitura constante do DOM)
+          const pos = this.model.getAttribute('position');
+          this.modelPos = { x: pos.x, y: pos.y, z: pos.z };
+
+          // Sensibilidade
+          this.hSensitivity = 0.008;  // horizontal (x/z)
+          this.vSensitivity = 0.008;  // vertical (y) via botões hold
+
+          // Controles verticais (hold para mover)
+          this._vertInterval = null;
+          this._bindVertical();
+
+          // Eventos de ponteiro unificados (mouse + touch)
+          const canvas = document.querySelector('canvas') || document.body;
+          canvas.addEventListener('pointerdown',  this._onDown.bind(this),  { passive: false });
+          canvas.addEventListener('pointermove',  this._onMove.bind(this),  { passive: false });
+          canvas.addEventListener('pointerup',    this._onUp.bind(this));
+          canvas.addEventListener('pointercancel',this._onUp.bind(this));
         },
 
-        onTap: function (evt) {
-          // Ignora eventos de multiponto (pinch/rotate do gesture-handler)
-          if (evt.touches && evt.touches.length > 1) return;
+        // ── Início do toque/clique ──────────────────────────────────────────
+        _onDown: function (evt) {
+          // Ignora se já há um drag ativo ou se é multitouch (gestures)
+          if (this.dragging) return;
+          if (evt.pointerType === 'touch' && evt.isPrimary === false) return;
 
-          const camera = this.camera;
-          const model = this.model;
+          evt.preventDefault();
+          this.dragging = true;
+          this.pointerId = evt.pointerId;
+          this.lastX = evt.clientX;
+          this.lastY = evt.clientY;
 
-          // Pega a direção para onde a câmera está apontando
-          const direction = new THREE.Vector3();
-          camera.object3D.getWorldDirection(direction);
+          // Captura o ponteiro para receber eventos fora do canvas
+          try { evt.target.setPointerCapture(evt.pointerId); } catch(e) {}
+        },
 
-          // Pega a posição mundial da câmera
-          const camPos = new THREE.Vector3();
-          camera.object3D.getWorldPosition(camPos);
+        // ── Movimento ──────────────────────────────────────────────────────
+        _onMove: function (evt) {
+          if (!this.dragging || evt.pointerId !== this.pointerId) return;
+          evt.preventDefault();
 
-          // Projeta o ponto no "chão" (y = 0) ao longo da direção da câmera
-          // Distância fixa de 1.5m se não houver detecção de plano
-          let targetPos;
+          const dx = evt.clientX - this.lastX;   // delta horizontal na tela
+          const dy = evt.clientY - this.lastY;   // delta vertical na tela
+          this.lastX = evt.clientX;
+          this.lastY = evt.clientY;
 
-          if (direction.y !== 0) {
-            // Raio da câmera até o plano y=0 (chão)
-            const t = -camPos.y / direction.y;
-            if (t > 0 && t < 5) {
-              // Ponto está à frente e a menos de 5 m
-              targetPos = new THREE.Vector3(
-                camPos.x + direction.x * t,
-                0,
-                camPos.z + direction.z * t
-              );
-            }
-          }
+          // Direção horizontal da câmera (ignorando componente Y)
+          const camObj   = this.camera.object3D;
+          const forward  = new THREE.Vector3();
+          const right    = new THREE.Vector3();
+          camObj.getWorldDirection(forward);
+          forward.y = 0;
+          forward.normalize();
+          right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-          // Fallback: coloca 1.5m à frente na mesma altura que a câmera
-          if (!targetPos) {
-            targetPos = new THREE.Vector3(
-              camPos.x + direction.x * 1.5,
-              camPos.y - 0.5,
-              camPos.z + direction.z * 1.5
-            );
-          }
+          // dx → eixo direita/esquerda   dy (tela) → frente/trás
+          this.modelPos.x += right.x   * dx * this.hSensitivity;
+          this.modelPos.z += right.z   * dx * this.hSensitivity;
+          this.modelPos.x -= forward.x * dy * this.hSensitivity;
+          this.modelPos.z -= forward.z * dy * this.hSensitivity;
 
-          // Aplica posição ao modelo
-          model.setAttribute('position', {
-            x: targetPos.x,
-            y: targetPos.y,
-            z: targetPos.z
+          this._applyPosition();
+        },
+
+        // ── Fim do toque/clique ────────────────────────────────────────────
+        _onUp: function (evt) {
+          if (evt.pointerId !== this.pointerId) return;
+          this.dragging = false;
+          this.pointerId = null;
+          this.hint.textContent = '▲▼ para subir/descer • Arraste para mover • Pinch para zoom';
+        },
+
+        // ── Botões verticais (hold) ────────────────────────────────────────
+        _bindVertical: function () {
+          const step = 0.04;   // metros por tick
+          const tick = 16;     // ms entre ticks (~60 fps)
+
+          const startMove = (dir) => {
+            if (this._vertInterval) return;
+            this._vertInterval = setInterval(() => {
+              this.modelPos.y += dir * step;
+              this._applyPosition();
+            }, tick);
+          };
+          const stopMove = () => {
+            clearInterval(this._vertInterval);
+            this._vertInterval = null;
+          };
+
+          const btnUp   = document.getElementById('btn-up');
+          const btnDown = document.getElementById('btn-down');
+
+          // Mouse
+          btnUp.addEventListener('mousedown',  () => startMove(+1));
+          btnDown.addEventListener('mousedown', () => startMove(-1));
+          document.addEventListener('mouseup',  stopMove);
+
+          // Touch
+          btnUp.addEventListener('touchstart',  (e) => { e.preventDefault(); startMove(+1); }, { passive: false });
+          btnDown.addEventListener('touchstart', (e) => { e.preventDefault(); startMove(-1); }, { passive: false });
+          btnUp.addEventListener('touchend',    stopMove);
+          btnDown.addEventListener('touchend',  stopMove);
+        },
+
+        // ── Aplica posição ao modelo ───────────────────────────────────────
+        _applyPosition: function () {
+          this.model.setAttribute('position', {
+            x: this.modelPos.x,
+            y: this.modelPos.y,
+            z: this.modelPos.z
           });
-
-          // Atualiza hint após primeiro posicionamento
-          if (!this.placed) {
-            this.placed = true;
-            this.hint.textContent = 'Toque para reposicionar • Pinch para zoom • 2 dedos para girar';
+          // Garante visibilidade
+          if (!this.model.getAttribute('visible')) {
+            this.model.setAttribute('visible', true);
           }
         }
       });
 
-      // Ativa o componente na cena
-      document.getElementById('scene').setAttribute('tap-to-place', '');
+      document.getElementById('scene').setAttribute('drag-place', '');
     </script>
 
   </body>
