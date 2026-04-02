@@ -5,15 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>AR - Coca-Cola em Superfície Plana</title>
   
-  <!-- A-Frame e AR.js -->
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.min.js"></script>
+  
+  <!-- AR.js - versão estável -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   
   <style>
     body {
       margin: 0;
       overflow: hidden;
       font-family: 'Arial', sans-serif;
+    }
+    
+    a-scene {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
     
     /* Instruções na tela */
@@ -23,13 +33,15 @@
       left: 0;
       right: 0;
       text-align: center;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
       color: white;
       padding: 12px;
       font-size: 14px;
       z-index: 1000;
       backdrop-filter: blur(5px);
       pointer-events: none;
+      border-radius: 10px;
+      margin: 0 20px;
     }
     
     /* Botão para resetar posição */
@@ -37,7 +49,7 @@
       position: fixed;
       bottom: 80px;
       right: 20px;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
       color: white;
       border: none;
       padding: 12px 20px;
@@ -54,21 +66,38 @@
       transform: scale(0.95);
     }
     
+    /* Botão de voltar */
+    .back-btn {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 1000;
+      cursor: pointer;
+      backdrop-filter: blur(5px);
+      text-decoration: none;
+      display: inline-block;
+    }
+    
     /* Indicador de toque */
     .tap-indicator {
       position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
       width: 60px;
       height: 60px;
       border: 2px solid white;
       border-radius: 50%;
-      background: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.5);
       z-index: 1000;
       pointer-events: none;
       display: none;
       animation: pulse 0.5s ease-out;
+      transform: translate(-50%, -50%);
     }
     
     @keyframes pulse {
@@ -81,32 +110,49 @@
         opacity: 0;
       }
     }
+    
+    /* Loading */
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 2000;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
+  
+  <!-- Loading inicial -->
+  <div class="loading" id="loading">
+    Iniciando câmera... 📷
+  </div>
   
   <!-- Cena AR com detecção de superfície plana -->
   <a-scene 
     embedded 
     arjs="sourceType: webcam; 
            debugUIEnabled: false;
-           detectionMode: mono_and_matrix;
-           matrixCodeType: 3x3;">
+           detectionMode: mono_and_matrix;">
     
     <!-- Câmera -->
     <a-entity camera></a-entity>
     
-    <!-- Luzes para melhor visualização do modelo -->
-    <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
-    <a-entity light="type: directional; intensity: 1.5;" position="1 2 1"></a-entity>
-    <a-entity light="type: point; intensity: 0.5;" position="0 1 0"></a-entity>
+    <!-- Luzes para melhor visualização -->
+    <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+    <a-entity light="type: directional; intensity: 1.2;" position="1 2 1"></a-entity>
     
-    <!-- Modelo Coca-Cola - aparece ao tocar na superfície -->
-    <a-entity id="coca-model" visible="false">
+    <!-- Modelo Coca-Cola - começa invisível -->
+    <a-entity id="coca-model" visible="false" position="0 0 -1">
       <a-entity 
         id="coca-gltf"
         gltf-model="url(coca.glb)"
-        scale="0.5 0.5 0.5"
+        scale="0.3 0.3 0.3"
         rotation="0 0 0">
       </a-entity>
     </a-entity>
@@ -114,25 +160,40 @@
   </a-scene>
   
   <!-- Elementos UI -->
-  <div class="instructions">
-    👆 Toque em qualquer superfície plana para posicionar a Coca-Cola 3D
+  <div class="instructions" id="instructions">
+    👆 Toque em qualquer lugar da tela para posicionar a Coca-Cola
   </div>
   
   <button class="reset-btn" id="resetBtn">
-    🔄 Resetar Posição
+    🔄 Remover Coca
+  </button>
+  
+  <button class="back-btn" id="backBtn" onclick="history.back()">
+    ← Voltar
   </button>
   
   <div class="tap-indicator" id="tapIndicator"></div>
   
   <script>
+    // Aguardar o carregamento da cena
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.display = 'none';
+        }
+      }, 2000);
+    });
+    
     // Elementos
     const scene = document.querySelector('a-scene');
     const cocaModel = document.getElementById('coca-model');
     const resetBtn = document.getElementById('resetBtn');
     const tapIndicator = document.getElementById('tapIndicator');
+    const instructions = document.getElementById('instructions');
     
-    let currentModelPosition = null;
     let modelPlaced = false;
+    let currentPosition = { x: 0, y: 0, z: -1 };
     
     // Função para mostrar indicador de toque
     function showTapIndicator(x, y) {
@@ -144,123 +205,156 @@
       }, 500);
     }
     
-    // Função para posicionar o modelo
-    function placeModel(screenX, screenY) {
-      // Mostra indicador visual
-      showTapIndicator(screenX, screenY);
-      
-      // Obtém a câmera do A-Frame
-      const camera = document.querySelector('[camera]').object3D;
-      
-      // Cria um raycaster para detectar a superfície
-      const raycaster = new THREE.Raycaster();
-      const mouseVector = new THREE.Vector2();
-      
-      // Converte coordenadas da tela para coordenadas normalizadas (-1 a 1)
-      mouseVector.x = (screenX / window.innerWidth) * 2 - 1;
-      mouseVector.y = -(screenY / window.innerHeight) * 2 + 1;
-      
-      // Configura o raycaster a partir da câmera
-      raycaster.setFromCamera(mouseVector, camera);
-      
-      // Cria um plano virtual no chão (Y = 0)
-      const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const targetPoint = new THREE.Vector3();
-      
-      // Calcula a interseção do raio com o plano
-      if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
-        // Posiciona o modelo no ponto de interseção
+    // Função para posicionar o modelo baseado no toque
+    function placeModelAtPosition(screenX, screenY) {
+      try {
+        // Mostra indicador visual
+        showTapIndicator(screenX, screenY);
+        
+        // Converte coordenada da tela para coordenada do mundo
+        // Usando a posição da câmera e direção
+        const camera = document.querySelector('[camera]');
+        if (!camera) {
+          console.error('Câmera não encontrada');
+          return;
+        }
+        
+        // Obtém a posição e rotação da câmera
+        const cameraPos = camera.getAttribute('position');
+        const cameraRotation = camera.getAttribute('rotation');
+        
+        // Calcula direção baseada no toque
+        // Normaliza coordenadas do toque (-1 a 1)
+        const x = (screenX / window.innerWidth) * 2 - 1;
+        const y = -(screenY / window.innerHeight) * 2 + 1;
+        
+        // Distância fixa para posicionar o modelo (1.5 metros à frente)
+        const distance = 1.5;
+        
+        // Posição baseada na direção da câmera
+        // Ângulo horizontal baseado na posição X do toque
+        const angleY = (x * 0.8); // +/- 45 graus
+        // Ângulo vertical baseado na posição Y do toque
+        const angleX = (y * 0.5); // +/- 30 graus
+        
+        // Calcula nova posição
+        const posX = -Math.sin(angleY) * distance;
+        const posY = -Math.sin(angleX) * distance + 0.2; // Altura um pouco acima do chão
+        const posZ = -Math.cos(angleY) * distance;
+        
+        // Posiciona o modelo
         cocaModel.setAttribute('visible', 'true');
-        cocaModel.setAttribute('position', `${targetPoint.x} ${targetPoint.y + 0.1} ${targetPoint.z}`);
+        cocaModel.setAttribute('position', `${posX} ${posY} ${posZ}`);
         
         // Adiciona animação de entrada
         const modelEntity = document.getElementById('coca-gltf');
-        modelEntity.setAttribute('animation', {
+        modelEntity.setAttribute('animation__enter', {
           property: 'scale',
           from: '0 0 0',
-          to: '0.5 0.5 0.5',
+          to: '0.3 0.3 0.3',
           dur: 400,
           easing: 'ease-out'
         });
         
-        currentModelPosition = { x: targetPoint.x, y: targetPoint.y + 0.1, z: targetPoint.z };
         modelPlaced = true;
+        currentPosition = { x: posX, y: posY, z: posZ };
         
-        // Feedback tátil (se disponível)
+        // Feedback visual nas instruções
+        instructions.style.background = 'rgba(0,0,0,0.9)';
+        instructions.innerHTML = '✅ Coca-Cola posicionada! Toque em outro lugar para mover';
+        setTimeout(() => {
+          instructions.innerHTML = '👆 Toque em qualquer lugar para posicionar a Coca-Cola';
+          instructions.style.background = 'rgba(0,0,0,0.8)';
+        }, 2000);
+        
+        // Feedback tátil
         if (window.navigator && window.navigator.vibrate) {
           window.navigator.vibrate(50);
         }
         
-        console.log(`Modelo posicionado em: X=${targetPoint.x}, Y=${targetPoint.y + 0.1}, Z=${targetPoint.z}`);
-      } else {
-        console.log('Nenhuma superfície plana detectada nessa posição');
-        // Feedback visual de erro
-        cocaModel.setAttribute('visible', 'false');
+        console.log(`Modelo posicionado em: X=${posX}, Y=${posY}, Z=${posZ}`);
+        
+      } catch (error) {
+        console.error('Erro ao posicionar modelo:', error);
       }
     }
     
-    // Evento de toque/clique na tela
-    scene.addEventListener('click', (event) => {
-      // Pega as coordenadas do clique
-      const rect = scene.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+    // Função para remover o modelo
+    function resetModel() {
+      cocaModel.setAttribute('visible', 'false');
+      modelPlaced = false;
       
-      // Posiciona o modelo
-      placeModel(event.clientX, event.clientY);
+      // Feedback visual
+      instructions.style.background = 'rgba(0,0,0,0.9)';
+      instructions.innerHTML = '🗑️ Coca-Cola removida! Toque para adicionar novamente';
+      setTimeout(() => {
+        instructions.innerHTML = '👆 Toque em qualquer lugar para posicionar a Coca-Cola';
+        instructions.style.background = 'rgba(0,0,0,0.8)';
+      }, 1500);
+      
+      console.log('Modelo resetado');
+    }
+    
+    // Evento de clique na tela
+    document.addEventListener('click', (event) => {
+      // Evita cliques nos botões
+      if (event.target === resetBtn || event.target === document.getElementById('backBtn')) {
+        return;
+      }
+      placeModelAtPosition(event.clientX, event.clientY);
     });
     
     // Evento touch para dispositivos móveis
-    scene.addEventListener('touchstart', (event) => {
+    document.addEventListener('touchstart', (event) => {
+      // Evita touches nos botões
+      if (event.target === resetBtn || event.target === document.getElementById('backBtn')) {
+        return;
+      }
       event.preventDefault();
       if (event.touches.length > 0) {
         const touch = event.touches[0];
-        placeModel(touch.clientX, touch.clientY);
+        placeModelAtPosition(touch.clientX, touch.clientY);
       }
     });
     
     // Botão resetar
-    resetBtn.addEventListener('click', () => {
-      cocaModel.setAttribute('visible', 'false');
-      modelPlaced = false;
-      currentModelPosition = null;
-      
-      // Feedback visual
-      resetBtn.style.transform = 'scale(0.95)';
-      setTimeout(() => {
-        resetBtn.style.transform = 'scale(1)';
-      }, 200);
-      
-      console.log('Posição resetada');
+    resetBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resetModel();
     });
     
-    // Ajusta o modelo para sempre ficar na superfície (opcional)
-    function updateModelPosition() {
-      if (modelPlaced && currentModelPosition) {
-        // Mantém o modelo na mesma posição relativa
-        cocaModel.setAttribute('position', 
-          `${currentModelPosition.x} ${currentModelPosition.y} ${currentModelPosition.z}`);
-      }
+    // Verificar se o modelo carregou
+    const modelEntity = document.getElementById('coca-gltf');
+    if (modelEntity) {
+      modelEntity.addEventListener('model-loaded', () => {
+        console.log('Modelo Coca-Cola carregado com sucesso!');
+        instructions.innerHTML = '✅ Modelo carregado! 👆 Toque na tela para posicionar';
+        setTimeout(() => {
+          instructions.innerHTML = '👆 Toque em qualquer lugar para posicionar a Coca-Cola';
+        }, 2000);
+      });
+      
+      modelEntity.addEventListener('model-error', (error) => {
+        console.error('Erro ao carregar o modelo:', error);
+        instructions.innerHTML = '❌ Erro ao carregar coca.glb! Verifique se o arquivo está na pasta correta';
+      });
     }
-    
-    // Atualiza a cada frame
-    function animate() {
-      updateModelPosition();
-      requestAnimationFrame(animate);
-    }
-    animate();
     
     // Log de inicialização
-    console.log('AR pronto! Toque na tela para posicionar o modelo Coca-Cola');
+    console.log('AR iniciado! Aguardando toque para posicionar o modelo');
     
-    // Instrução adicional para dispositivos iOS
-    setTimeout(() => {
-      const instructions = document.querySelector('.instructions');
-      instructions.style.opacity = '0.7';
+    // Esconde loading quando a cena estiver pronta
+    scene.addEventListener('loaded', () => {
       setTimeout(() => {
-        instructions.style.opacity = '1';
-      }, 3000);
-    }, 2000);
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.opacity = '0';
+          setTimeout(() => {
+            loading.style.display = 'none';
+          }, 500);
+        }
+      }, 1000);
+    });
   </script>
 </body>
 </html>
