@@ -1,249 +1,255 @@
 <!doctype html>
 <html>
-<head>
-  <title>WebAR – Oclusão Real</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
-  <style>
-    * { margin: 0; padding: 0; }
-    body { background: #000; overflow: hidden; }
-    #btn-ar {
-      position: fixed;
-      bottom: 40px; left: 50%;
-      transform: translateX(-50%);
-      padding: 14px 32px;
-      background: #fff;
-      border: none;
-      border-radius: 32px;
-      font-size: 16px;
-      font-family: Arial, sans-serif;
-      cursor: pointer;
-      z-index: 10;
-    }
-    #info {
-      position: fixed;
-      top: 16px; left: 50%;
-      transform: translateX(-50%);
-      color: #fff;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      background: rgba(0,0,0,0.5);
-      padding: 8px 18px;
-      border-radius: 20px;
-      pointer-events: none;
-      z-index: 10;
-    }
-  </style>
-</head>
-<body>
-  <div id="info">Clique em "Entrar em AR" e aponte para uma superfície</div>
-  <button id="btn-ar">Entrar em AR</button>
+  <head>
+    <title>WebAR – Coca Markerless</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
-    // ── Setup básico Three.js ──────────────────────────────────────────
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { overflow: hidden; background: #000; }
 
-    const scene  = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-    // ── Iluminação ─────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
-    sun.position.set(2, 6, -3);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.near = 0.1;
-    sun.shadow.camera.far  = 20;
-    sun.shadow.bias = -0.0005;
-    scene.add(sun);
-
-    // ── Plano receptor de sombra ───────────────────────────────────────
-    const shadowPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(6, 6),
-      new THREE.ShadowMaterial({ opacity: 0.35 })
-    );
-    shadowPlane.rotation.x = -Math.PI / 2;
-    shadowPlane.receiveShadow = true;
-    shadowPlane.visible = false; // aparece após hit-test
-    scene.add(shadowPlane);
-
-    // ── Modelo 3D ──────────────────────────────────────────────────────
-    let model = null;
-    new GLTFLoader().load('coca.glb', (gltf) => {
-      model = gltf.scene;
-      model.scale.setScalar(0.3);
-      model.traverse(obj => {
-        if (obj.isMesh) {
-          obj.castShadow    = true;
-          obj.receiveShadow = true;
-        }
-      });
-      model.visible = false; // aparece após primeiro hit-test
-      scene.add(model);
-    });
-
-    // ── Shader de oclusão por depth sensing ───────────────────────────
-    // Este material lê o depthTexture do WebXR e descarta fragmentos
-    // onde o ambiente real está mais perto que o modelo virtual.
-    const occlusionMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        depthTexture:  { value: null },
-        uvTransform:   { value: new THREE.Matrix4() },
-        resolution:    { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-        cameraNear:    { value: 0.01 },
-        cameraFar:     { value: 20.0 }
-      },
-      vertexShader: `
-        varying vec4 vPosition;
-        void main() {
-          vPosition = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          gl_Position = vPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D depthTexture;
-        uniform mat4      uvTransform;
-        uniform vec2      resolution;
-        uniform float     cameraNear;
-        uniform float     cameraFar;
-        varying vec4      vPosition;
-
-        float linearizeDepth(float d) {
-          return cameraNear * cameraFar / (cameraFar - d * (cameraFar - cameraNear));
-        }
-
-        void main() {
-          // UV do fragmento na tela
-          vec2 uv = (vPosition.xy / vPosition.w) * 0.5 + 0.5;
-
-          // Aplica transformação de UV do depth sensing
-          vec2 depthUV = (uvTransform * vec4(uv, 0.0, 1.0)).xy;
-
-          // Profundidade do ambiente real neste pixel
-          float realDepth = texture2D(depthTexture, depthUV).r;
-
-          // Profundidade do fragmento virtual
-          float virtualDepth = linearizeDepth(gl_FragCoord.z);
-
-          // Se o ambiente real está mais perto → descarta o fragmento
-          if (realDepth < virtualDepth - 0.02) discard;
-
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-        }
-      `,
-      transparent: true,
-      depthWrite:  false,
-      side: THREE.DoubleSide
-    });
-
-    // Plano occluder — mesmo tamanho do shadow plane
-    // Fica no mesmo lugar mas aplica o shader de profundidade
-    const occluder = new THREE.Mesh(
-      new THREE.PlaneGeometry(6, 6),
-      occlusionMaterial
-    );
-    occluder.rotation.x = -Math.PI / 2;
-    occluder.visible    = false;
-    scene.add(occluder);
-
-    // ── Hit-test (detecta superfícies) ────────────────────────────────
-    let xrSession    = null;
-    let hitTestSource = null;
-    let depthInfo    = null;
-
-    // ── Botão entrar em AR ─────────────────────────────────────────────
-    document.getElementById('btn-ar').addEventListener('click', async () => {
-      if (!navigator.xr) {
-        alert('WebXR não disponível neste navegador.');
-        return;
+      #hint {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        padding: 10px 22px;
+        border-radius: 24px;
+        text-align: center;
+        pointer-events: none;
+        z-index: 20;
+        white-space: nowrap;
       }
 
-      const supported = await navigator.xr.isSessionSupported('immersive-ar');
-      if (!supported) {
-        alert('AR não suportado neste dispositivo.');
-        return;
+      #reticle {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px; height: 40px;
+        border: 2px solid rgba(255,255,255,0.8);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 20;
+      }
+      #reticle::after {
+        content: '';
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 6px; height: 6px;
+        background: #fff;
+        border-radius: 50%;
       }
 
-      // Solicita sessão com hit-test + depth-sensing
-      xrSession = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test'],
-        optionalFeatures: ['depth-sensing', 'dom-overlay'],
-        depthSensing: {
-          usagePreference:  ['gpu-optimized'],         // textura na GPU
-          dataFormatPreference: ['luminance-alpha']    // formato compatível
+      /* Botões verticais */
+      #vertical-controls {
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 20;
+      }
+      #vertical-controls button {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        font-size: 24px;
+        cursor: pointer;
+        touch-action: manipulation;
+        user-select: none;
+      }
+      #vertical-controls button:active {
+        background: rgba(255,255,255,0.3);
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="hint">Toque na tela para posicionar o modelo</div>
+    <div id="reticle"></div>
+
+    <!-- Controles verticais -->
+    <div id="vertical-controls">
+      <button id="btn-up">▲</button>
+      <button id="btn-down">▼</button>
+    </div>
+
+    <a-scene
+      id="scene"
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+      vr-mode-ui="enabled: false"
+      renderer="logarithmicDepthBuffer: true; precision: medium;"
+      gesture-detector
+    >
+      <a-assets>
+        <a-asset-item id="coca-model" src="coca.glb"></a-asset-item>
+      </a-assets>
+
+      <a-entity
+        id="coca"
+        gltf-model="#coca-model"
+        scale="0.05 0.05 0.05"
+        position="0 -0.5 -1.5"
+        rotation="0 0 0"
+        gesture-handler="enabled: true"
+        visible="true"
+      ></a-entity>
+
+      <a-entity camera look-controls></a-entity>
+    </a-scene>
+
+    <script>
+      AFRAME.registerComponent('drag-place', {
+        init: function () {
+          this.model       = document.getElementById('coca');
+          this.camera      = document.querySelector('[camera]');
+          this.hint        = document.getElementById('hint');
+
+          // Estado do drag
+          this.dragging    = false;
+          this.touchId     = null;          // identifier do toque ativo
+          this.lastX       = 0;
+          this.lastY       = 0;
+
+          // Posição atual do modelo (mantida em JS para evitar leitura constante do DOM)
+          const pos = this.model.getAttribute('position');
+          this.modelPos = { x: pos.x, y: pos.y, z: pos.z };
+
+          // Sensibilidade
+          this.hSensitivity = 0.008;  // horizontal (x/z)
+          this.vSensitivity = 0.008;  // vertical (y) via botões hold
+
+          // Controles verticais (hold para mover)
+          this._vertInterval = null;
+          this._bindVertical();
+
+          // Eventos de ponteiro unificados (mouse + touch)
+          const canvas = document.querySelector('canvas') || document.body;
+          canvas.addEventListener('pointerdown',  this._onDown.bind(this),  { passive: false });
+          canvas.addEventListener('pointermove',  this._onMove.bind(this),  { passive: false });
+          canvas.addEventListener('pointerup',    this._onUp.bind(this));
+          canvas.addEventListener('pointercancel',this._onUp.bind(this));
         },
-        domOverlay: { root: document.body }
-      });
 
-      renderer.xr.setSession(xrSession);
-      document.getElementById('btn-ar').style.display = 'none';
+        // ── Início do toque/clique ──────────────────────────────────────────
+        _onDown: function (evt) {
+          // Ignora se já há um drag ativo ou se é multitouch (gestures)
+          if (this.dragging) return;
+          if (evt.pointerType === 'touch' && evt.isPrimary === false) return;
 
-      // Hit-test source: mira no centro da tela
-      const viewerSpace = await xrSession.requestReferenceSpace('viewer');
-      hitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
+          evt.preventDefault();
+          this.dragging = true;
+          this.pointerId = evt.pointerId;
+          this.lastX = evt.clientX;
+          this.lastY = evt.clientY;
 
-      // Loop de renderização
-      renderer.setAnimationLoop((timestamp, frame) => {
-        if (!frame) return;
+          // Captura o ponteiro para receber eventos fora do canvas
+          try { evt.target.setPointerCapture(evt.pointerId); } catch(e) {}
+        },
 
-        // ── Hit-test: posiciona modelo na superfície ─────────────────
-        if (hitTestSource) {
-          const hits = frame.getHitTestResults(hitTestSource);
-          if (hits.length > 0 && model) {
-            const refSpace = renderer.xr.getReferenceSpace();
-            const pose     = hits[0].getPose(refSpace);
-            const pos      = pose.transform.position;
+        // ── Movimento ──────────────────────────────────────────────────────
+        _onMove: function (evt) {
+          if (!this.dragging || evt.pointerId !== this.pointerId) return;
+          evt.preventDefault();
 
-            model.position.set(pos.x, pos.y, pos.z);
-            model.visible       = true;
-            shadowPlane.position.set(pos.x, pos.y, pos.z);
-            shadowPlane.visible = true;
-            occluder.position.set(pos.x, pos.y, pos.z);
-            occluder.visible    = true;
+          const dx = evt.clientX - this.lastX;   // delta horizontal na tela
+          const dy = evt.clientY - this.lastY;   // delta vertical na tela
+          this.lastX = evt.clientX;
+          this.lastY = evt.clientY;
+
+          // Direção horizontal da câmera (ignorando componente Y)
+          const camObj   = this.camera.object3D;
+          const forward  = new THREE.Vector3();
+          const right    = new THREE.Vector3();
+          camObj.getWorldDirection(forward);
+          forward.y = 0;
+          forward.normalize();
+          right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+          // dx → eixo direita/esquerda   dy (tela) → frente/trás
+          this.modelPos.x += right.x   * dx * this.hSensitivity;
+          this.modelPos.z += right.z   * dx * this.hSensitivity;
+          this.modelPos.x -= forward.x * dy * this.hSensitivity;
+          this.modelPos.z -= forward.z * dy * this.hSensitivity;
+
+          this._applyPosition();
+        },
+
+        // ── Fim do toque/clique ────────────────────────────────────────────
+        _onUp: function (evt) {
+          if (evt.pointerId !== this.pointerId) return;
+          this.dragging = false;
+          this.pointerId = null;
+          this.hint.textContent = '▲▼ para subir/descer • Arraste para mover • Pinch para zoom';
+        },
+
+        // ── Botões verticais (hold) ────────────────────────────────────────
+        _bindVertical: function () {
+          const step = 0.04;   // metros por tick
+          const tick = 16;     // ms entre ticks (~60 fps)
+
+          const startMove = (dir) => {
+            if (this._vertInterval) return;
+            this._vertInterval = setInterval(() => {
+              this.modelPos.y += dir * step;
+              this._applyPosition();
+            }, tick);
+          };
+          const stopMove = () => {
+            clearInterval(this._vertInterval);
+            this._vertInterval = null;
+          };
+
+          const btnUp   = document.getElementById('btn-up');
+          const btnDown = document.getElementById('btn-down');
+
+          // Mouse
+          btnUp.addEventListener('mousedown',  () => startMove(+1));
+          btnDown.addEventListener('mousedown', () => startMove(-1));
+          document.addEventListener('mouseup',  stopMove);
+
+          // Touch
+          btnUp.addEventListener('touchstart',  (e) => { e.preventDefault(); startMove(+1); }, { passive: false });
+          btnDown.addEventListener('touchstart', (e) => { e.preventDefault(); startMove(-1); }, { passive: false });
+          btnUp.addEventListener('touchend',    stopMove);
+          btnDown.addEventListener('touchend',  stopMove);
+        },
+
+        // ── Aplica posição ao modelo ───────────────────────────────────────
+        _applyPosition: function () {
+          this.model.setAttribute('position', {
+            x: this.modelPos.x,
+            y: this.modelPos.y,
+            z: this.modelPos.z
+          });
+          // Garante visibilidade
+          if (!this.model.getAttribute('visible')) {
+            this.model.setAttribute('visible', true);
           }
         }
-
-        // ── Depth sensing: atualiza uniforms do shader ───────────────
-        if (xrSession.depthUsage !== undefined) {
-          const pose = frame.getViewerPose(renderer.xr.getReferenceSpace());
-          if (pose) {
-            const view = pose.views[0];
-            depthInfo  = frame.getDepthInformation(view);
-
-            if (depthInfo && depthInfo.texture) {
-              occlusionMaterial.uniforms.depthTexture.value  = depthInfo.texture;
-              occlusionMaterial.uniforms.uvTransform.value   = depthInfo.normDepthBufferFromNormView.matrix;
-              occlusionMaterial.uniforms.cameraNear.value    = camera.near;
-              occlusionMaterial.uniforms.cameraFar.value     = camera.far;
-            }
-          }
-        }
-
-        renderer.render(scene, camera);
       });
-    });
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
-</body>
+      document.getElementById('scene').setAttribute('drag-place', '');
+    </script>
+
+  </body>
 </html>
