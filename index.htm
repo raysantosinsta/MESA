@@ -1,16 +1,16 @@
 <!doctype html>
 <html>
   <head>
-    <title>AR com Coca-Cola - Superfície Plana</title>
+    <title>AR Coca-Cola - Superfície Plana</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
     <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 
-    <!-- AR.js (versão com suporte a hit-test/plane) -->
+    <!-- AR.js -->
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-    <!-- Gestos (pinch zoom + rotação) -->
+    <!-- Gestos (pinch zoom + rotate) -->
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
@@ -22,15 +22,16 @@
         left: 10px;
         color: white;
         font-family: Arial, sans-serif;
-        background: rgba(0,0,0,0.4);
-        padding: 10px;
+        background: rgba(0,0,0,0.5);
+        padding: 12px;
         border-radius: 8px;
         pointer-events: none;
-        z-index: 10;
+        z-index: 100;
       }
     </style>
   </head>
   <body>
+    <!-- Mensagem de ajuda -->
     <div id="ar-overlay">
       <p>Mova o celular devagar para detectar a superfície plana<br>
          Pinch → Zoom<br>
@@ -50,16 +51,16 @@
       <!-- Camera -->
       <a-entity camera></a-entity>
 
-      <!-- Modelo que aparece na superfície plana -->
+      <!-- Modelo Coca-Cola que aparece na superfície plana -->
       <a-entity
         id="coca-model"
         class="tocavel"
         gesture-handler="enabled: true"
-        gltf-model="coca.glb"         
-        scale="0.5 0.5 0.5"            
-        position="0 0.1 0"             
+        gltf-model="coca.glb"
+        scale="0.4 0.4 0.4"           <!-- ajuste o tamanho aqui -->
+        position="0 0.05 0"           <!-- levanta um pouco do chão -->
         rotation="0 0 0"
-        visible="false"                
+        visible="false"
         sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.8; positional: false"
       >
       </a-entity>
@@ -69,25 +70,23 @@
       const scene = document.querySelector('a-scene');
       const model = document.getElementById('coca-model');
 
-      // Quando a cena AR estiver pronta
       scene.addEventListener('loaded', () => {
-        console.log('AR Scene carregada');
+        console.log('✅ Cena AR carregada');
 
-        // Hit-test para detectar superfície plana (funciona melhor em dispositivos com ARCore/ARKit)
+        // Quando detectar superfície plana
         scene.addEventListener('ar-hit-test-entered', () => {
-          console.log('Superfície plana detectada!');
+          console.log('✅ Superfície plana detectada!');
           model.setAttribute('visible', 'true');
         });
 
-        // Opcional: esconder novamente se perder o tracking (pouco comum)
-        scene.addEventListener('ar-hit-test-exited', () => {
-          console.log('Perdeu a superfície');
-          // model.setAttribute('visible', 'false');
-        });
+        // Opcional: esconder se perder o tracking
+        // scene.addEventListener('ar-hit-test-exited', () => {
+        //   model.setAttribute('visible', 'false');
+        // });
       });
 
-      // Clique no modelo para pausar/tocar o som (opcional)
-      model.addEventListener('click', function () {
+      // Clique no modelo para pausar / tocar o som
+      model.addEventListener('click', function() {
         const soundComp = this.components.sound;
         if (soundComp) {
           if (soundComp.isPlaying) {
