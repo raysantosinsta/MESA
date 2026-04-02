@@ -17,7 +17,7 @@
       left: 15px;
       color: white;
       font-family: Arial, sans-serif;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.85);
       padding: 15px;
       border-radius: 10px;
       z-index: 100;
@@ -27,11 +27,11 @@
 </head>
 <body>
   <div id="instructions">
-    <p><strong>Instruções (Redmi 9S):</strong><br><br>
-       1. Aponte a câmera para o chão ou mesa bem iluminada<br>
-       2. Toque na tela para colocar a Coca-Cola<br>
-       3. Pinch → Zoom<br>
-       4. Dois dedos girando → Rotação</p>
+    <p><strong>Como usar:</strong><br><br>
+       1. Aponte para o chão ou mesa bem iluminada<br>
+       2. <strong>Arraste o dedo</strong> na tela para mover o círculo<br>
+       3. Quando o círculo estiver no chão → <strong>Toque uma vez</strong> para colocar a Coca<br>
+       4. Depois use Pinch (dois dedos) para zoom e girar</p>
   </div>
 
   <a-scene
@@ -41,18 +41,17 @@
     renderer="alpha: true;"
   >
     <a-assets>
-      <!-- Remova ou comente o áudio se não tiver o arquivo -->
       <!-- <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio> -->
     </a-assets>
 
     <a-entity camera></a-entity>
 
-    <!-- Cursor de mira (círculo) -->
+    <!-- Cursor de mira (círculo que você move com o dedo) -->
     <a-entity
       id="reticle"
-      geometry="primitive: ring; radiusInner: 0.07; radiusOuter: 0.10;"
-      material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.85;"
-      position="0 0 -0.6"
+      geometry="primitive: ring; radiusInner: 0.08; radiusOuter: 0.11;"
+      material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.9;"
+      position="0 0 -0.5"
       rotation="-90 0 0"
       visible="true"
     ></a-entity>
@@ -64,10 +63,9 @@
       gesture-handler="enabled: true"
       gltf-model="coca.glb"
       scale="0.01 0.01 0.01"
-      position="0 0.05 0"
+      position="0 0 0"
       rotation="0 0 0"
       visible="false"
-      <!-- sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.7;" -->
     ></a-entity>
   </a-scene>
 
@@ -76,21 +74,48 @@
     const model = document.getElementById('coca-model');
     const reticle = document.getElementById('reticle');
 
+    let isPlaced = false;
+
     scene.addEventListener('loaded', () => {
-      console.log('✅ AR.js carregado no Redmi 9S - Toque na tela para colocar');
+      console.log('✅ AR.js carregado - Arraste o dedo para mover o círculo');
     });
 
-    // Toque na tela = coloca o modelo na posição do cursor
+    // Arrastar o dedo move o cursor
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+
+    scene.addEventListener('touchstart', (e) => {
+      if (isPlaced) return;
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+    });
+
+    scene.addEventListener('touchmove', (e) => {
+      if (isPlaced) return;
+      const deltaX = (e.touches[0].clientX - lastTouchX) * 0.003;
+      const deltaY = (e.touches[0].clientY - lastTouchY) * 0.003;
+
+      let pos = reticle.getAttribute('position');
+      pos.x += deltaX;
+      pos.y -= deltaY;   // inverte Y para ficar natural
+      reticle.setAttribute('position', pos);
+
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+    });
+
+    // Toque simples = coloca o modelo
     scene.addEventListener('click', () => {
-      if (model.getAttribute('visible') === 'false') {
+      if (!isPlaced) {
         const pos = reticle.getAttribute('position');
-        model.setAttribute('position', `${pos.x} ${pos.y + 0.04} ${pos.z}`);
+        model.setAttribute('position', `${pos.x} ${pos.y + 0.05} ${pos.z}`);
         model.setAttribute('visible', 'true');
-        console.log('✅ Modelo colocado!');
+        isPlaced = true;
+        console.log('✅ Coca-Cola colocada!');
       }
     });
 
-    // Clique no modelo para pausar/tocar som (se quiser ativar depois)
+    // Clique no modelo para pausar/tocar som (se quiser usar depois)
     model.addEventListener('click', function() {
       const sound = this.components.sound;
       if (sound) sound.isPlaying ? sound.pause() : sound.play();
