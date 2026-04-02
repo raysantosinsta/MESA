@@ -1,131 +1,175 @@
 <!doctype html>
 <html>
-<head>
-  <title>AR Coca-Cola - Fixo no Chão</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <head>
+    <title>WebAR – Coca Markerless</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
 
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
-  <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    #instructions {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      color: white;
-      font-family: Arial, sans-serif;
-      background: rgba(0,0,0,0.85);
-      padding: 15px;
-      border-radius: 10px;
-      z-index: 100;
-      max-width: 320px;
-    }
-  </style>
-</head>
-<body>
-  <div id="instructions">
-    <p><strong>Como usar:</strong><br><br>
-       1. Aponte para o chão ou mesa bem iluminada<br>
-       2. <strong>Arraste o dedo</strong> para mover o círculo azul<br>
-       3. Quando o círculo estiver bem posicionado → <strong>Toque uma vez</strong> (sem segurar)<br>
-       4. O modelo ficará fixo no lugar!</p>
-  </div>
+    <!-- AR.js (location + markerless) -->
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
 
-  <a-scene
-    embedded
-    arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best; videoTexture: true;"
-    gesture-detector
-    renderer="alpha: true;"
-  >
-    <a-assets></a-assets>
+    <!-- Gesture support (pinch zoom + rotate) -->
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
-    <a-entity camera></a-entity>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { overflow: hidden; background: #000; }
 
-    <!-- Cursor de mira (você move com o dedo) -->
-    <a-entity
-      id="reticle"
-      geometry="primitive: ring; radiusInner: 0.07; radiusOuter: 0.10;"
-      material="color: cyan; shader: flat; transparent: true; opacity: 0.9;"
-      position="0 0 -0.5"
-      rotation="-90 0 0"
-      visible="true"
-    ></a-entity>
-
-    <!-- Modelo Coca-Cola (vai ficar fixo no mundo) -->
-    <a-entity
-      id="coca-model"
-      class="tocavel"
-      gesture-handler="enabled: true"
-      gltf-model="coca.glb"
-      scale="0.01 0.01 0.01"
-      position="0 0 0"
-      rotation="0 0 0"
-      visible="false"
-    ></a-entity>
-  </a-scene>
-
-  <script>
-    const scene = document.querySelector('a-scene');
-    const model = document.getElementById('coca-model');
-    const reticle = document.getElementById('reticle');
-
-    let modelPlaced = false;
-
-    scene.addEventListener('loaded', () => {
-      console.log('✅ Pronto - Arraste para mover o círculo');
-    });
-
-    // === MOVIMENTAÇÃO DO CURSOR COM O DEDO ===
-    let lastX = 0;
-    let lastY = 0;
-
-    scene.addEventListener('touchstart', (e) => {
-      if (modelPlaced) return;
-      lastX = e.touches[0].clientX;
-      lastY = e.touches[0].clientY;
-    });
-
-    scene.addEventListener('touchmove', (e) => {
-      if (modelPlaced) return;
-
-      const deltaX = (e.touches[0].clientX - lastX) * 0.004;
-      const deltaY = (e.touches[0].clientY - lastY) * 0.004;
-
-      let pos = reticle.getAttribute('position');
-      pos.x += deltaX;
-      pos.y -= deltaY;        // Y invertido para movimento natural
-      pos.z = -0.5;           // mantém distância fixa da câmera
-
-      reticle.setAttribute('position', pos);
-
-      lastX = e.touches[0].clientX;
-      lastY = e.touches[0].clientY;
-    });
-
-    // === COLOCAR O MODELO ===
-    scene.addEventListener('click', () => {
-      if (!modelPlaced) {
-        const reticlePos = reticle.getAttribute('position');
-        
-        // Posiciona o modelo exatamente onde está o círculo + um pouco acima do chão
-        model.setAttribute('position', `${reticlePos.x} ${reticlePos.y + 0.06} ${reticlePos.z}`);
-        model.setAttribute('visible', 'true');
-        
-        modelPlaced = true;
-        console.log('✅ Modelo colocado e fixo no lugar!');
+      #overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+        z-index: 10;
       }
-    });
 
-    // Clique no modelo para pausar/tocar som (opcional)
-    model.addEventListener('click', function() {
-      const sound = this.components.sound;
-      if (sound) {
-        sound.isPlaying ? sound.pause() : sound.play();
+      #hint {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.55);
+        color: #fff;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        padding: 10px 20px;
+        border-radius: 24px;
+        text-align: center;
+        pointer-events: none;
+        z-index: 20;
+        transition: opacity 0.5s;
       }
-    });
-  </script>
-</body>
+
+      #reticle {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px; height: 40px;
+        border: 2px solid rgba(255,255,255,0.8);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 20;
+      }
+      #reticle::after {
+        content: '';
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 6px; height: 6px;
+        background: #fff;
+        border-radius: 50%;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="hint">Aponte a câmera para uma superfície plana e toque para posicionar</div>
+    <div id="reticle"></div>
+
+    <a-scene
+      id="scene"
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+      vr-mode-ui="enabled: false"
+      renderer="logarithmicDepthBuffer: true; precision: medium;"
+      gesture-detector
+    >
+      <a-assets>
+        <a-asset-item id="coca-model" src="coca.glb"></a-asset-item>
+      </a-assets>
+
+      <!-- Modelo posicionado à frente da câmera inicialmente -->
+      <a-entity
+        id="coca"
+        gltf-model="#coca-model"
+        scale="0.3 0.3 0.3"
+        position="0 -0.5 -1.5"
+        rotation="0 0 0"
+        gesture-handler="enabled: true"
+        visible="true"
+      ></a-entity>
+
+      <a-entity camera look-controls></a-entity>
+    </a-scene>
+
+    <script>
+      AFRAME.registerComponent('tap-to-place', {
+        init: function () {
+          this.model = document.getElementById('coca');
+          this.camera = document.querySelector('[camera]');
+          this.placed = false;
+          this.hint = document.getElementById('hint');
+
+          // Escuta toque/clique na cena
+          document.addEventListener('click', this.onTap.bind(this));
+          document.addEventListener('touchend', this.onTap.bind(this));
+        },
+
+        onTap: function (evt) {
+          // Ignora eventos de multiponto (pinch/rotate do gesture-handler)
+          if (evt.touches && evt.touches.length > 1) return;
+
+          const camera = this.camera;
+          const model = this.model;
+
+          // Pega a direção para onde a câmera está apontando
+          const direction = new THREE.Vector3();
+          camera.object3D.getWorldDirection(direction);
+
+          // Pega a posição mundial da câmera
+          const camPos = new THREE.Vector3();
+          camera.object3D.getWorldPosition(camPos);
+
+          // Projeta o ponto no "chão" (y = 0) ao longo da direção da câmera
+          // Distância fixa de 1.5m se não houver detecção de plano
+          let targetPos;
+
+          if (direction.y !== 0) {
+            // Raio da câmera até o plano y=0 (chão)
+            const t = -camPos.y / direction.y;
+            if (t > 0 && t < 5) {
+              // Ponto está à frente e a menos de 5 m
+              targetPos = new THREE.Vector3(
+                camPos.x + direction.x * t,
+                0,
+                camPos.z + direction.z * t
+              );
+            }
+          }
+
+          // Fallback: coloca 1.5m à frente na mesma altura que a câmera
+          if (!targetPos) {
+            targetPos = new THREE.Vector3(
+              camPos.x + direction.x * 1.5,
+              camPos.y - 0.5,
+              camPos.z + direction.z * 1.5
+            );
+          }
+
+          // Aplica posição ao modelo
+          model.setAttribute('position', {
+            x: targetPos.x,
+            y: targetPos.y,
+            z: targetPos.z
+          });
+
+          // Atualiza hint após primeiro posicionamento
+          if (!this.placed) {
+            this.placed = true;
+            this.hint.textContent = 'Toque para reposicionar • Pinch para zoom • 2 dedos para girar';
+          }
+        }
+      });
+
+      // Ativa o componente na cena
+      document.getElementById('scene').setAttribute('tap-to-place', '');
+    </script>
+
+  </body>
 </html>
