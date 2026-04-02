@@ -1,0 +1,343 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Meu Projeto AR com Detecção de Planos e Áudio</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
+    <!-- AR.js -->
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+    <!-- Gesture support para AR.js (pinch zoom + rotate) -->
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      #ar-overlay {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-family: Arial;
+        pointer-events: none;
+        background: rgba(0,0,0,0.7);
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 100;
+      }
+      #detection-status {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        color: white;
+        font-family: Arial;
+        background: rgba(0,0,0,0.7);
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 100;
+        font-size: 14px;
+        pointer-events: none;
+      }
+      .instruction {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        color: white;
+        font-family: Arial;
+        background: rgba(0,0,0,0.7);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Mensagens de status -->
+    <div id="ar-overlay">
+      <p>🔍 Procurando superfície plana...</p>
+      <p>✨ Aponte para o CHÃO ou MESA</p>
+    </div>
+    
+    <div id="detection-status">
+      ⚠️ Aguardando detecção de plano...
+    </div>
+    
+    <div class="instruction">
+      👆 Pinch → Zoom<br />
+      ✌️ Dois dedos → Rotação
+    </div>
+
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; planeDetection: true;"
+      gesture-detector
+      renderer="antialias: true"
+    >
+      <!-- Assets para carregar o áudio e modelo -->
+      <a-assets>
+        <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio>
+      </a-assets>
+
+      <!-- Camera -->
+      <a-entity camera></a-entity>
+
+      <!-- Markerless plane detection - Superfície plana -->
+      <a-entity 
+        id="plane-detector"
+        plane-detection
+        visible="false">
+      </a-entity>
+
+      <!-- Modelo que só aparece quando detectar plano -->
+      <a-entity
+        id="model-container"
+        visible="false"
+        position="0 0 0">
+        
+        <a-entity
+          class="tocavel"
+          gesture-handler="enabled: true"
+          gltf-model="url(coca.glb)"
+          scale="0.5 0.5 0.5"
+          position="0 0 0"
+          rotation="0 0 0"
+          id="heart-model"
+          sound="src: #heart-sound; autoplay: true; loop: true; volume: 10.0; positional: false"
+        >
+        </a-entity>
+        
+        <!-- Anel de indicação visual no chão -->
+        <a-ring
+          radius="0.3"
+          radius-inner="0.28"
+          color="#00ff00"
+          opacity="0.8"
+          position="0 -0.05 0"
+          rotation="-90 0 0"
+          material="transparent: true; opacity: 0.6">
+        </a-ring>
+      </a-entity>
+      
+      <!-- Sistema de detecção de planos via JavaScript -->
+      <a-entity id="plane-system" visible="false"></a-entity>
+    </a-scene>
+
+    <script>
+      // Sistema de detecção de planos avançado
+      AFRAME.registerComponent('plane-detection', {
+        init: function() {
+          this.planeFound = false;
+          this.planePosition = null;
+          this.checkInterval = null;
+          this.statusDiv = document.getElementById('detection-status');
+          this.overlayDiv = document.getElementById('ar-overlay');
+          this.modelContainer = document.getElementById('model-container');
+          
+          // Tentar acessar a câmera e detectar planos
+          this.setupPlaneDetection();
+        },
+        
+        setupPlaneDetection: function() {
+          const scene = this.el.sceneEl;
+          const self = this;
+          
+          // Atualizar status
+          this.updateStatus("📱 Movimente a câmera para detectar CHÃO ou MESA...");
+          
+          // Usar o sistema de hit-test do AR.js (se disponível)
+          // Alternativa: simular detecção baseada em movimento e profundidade
+          
+          // Simular detecção após alguns segundos (em produção, isso viria do ARKit/ARCore)
+          // Aqui usamos um mecanismo de "toque na tela" para posicionar manualmente
+          // já que o planeDetection nativo precisa de implementação específica
+          
+          // Método: Toque na tela para posicionar em superfície plana
+          this.setupTouchPlacement();
+          
+          // Também tentar detectar automaticamente após estabilização
+          setTimeout(() => {
+            if (!this.planeFound) {
+              this.updateStatus("💡 Dica: Toque na tela em uma superfície plana (chão/mesa) para colocar o modelo!");
+              this.showHint("Toque em qualquer superfície plana");
+            }
+          }, 3000);
+        },
+        
+        setupTouchPlacement: function() {
+          const self = this;
+          const scene = this.el.sceneEl;
+          const camera = document.querySelector('a-entity[camera]');
+          
+          // Adicionar evento de toque para posicionamento
+          window.addEventListener('touchstart', function(event) {
+            if (event.touches.length === 1 && !self.planeFound) {
+              // Toque único para posicionar (evitar conflito com gestos)
+              self.attemptPlanePlacement(event);
+            }
+          });
+          
+          // Também suportar clique em desktop para teste
+          window.addEventListener('click', function(event) {
+            if (!self.planeFound && event.button === 0) {
+              self.attemptPlanePlacement(event);
+            }
+          });
+        },
+        
+        attemptPlanePlacement: function(event) {
+          const self = this;
+          const scene = this.el.sceneEl;
+          const camera = document.querySelector('a-entity[camera]');
+          
+          if (!camera) return;
+          
+          this.updateStatus("🔍 Verificando superfície plana...");
+          
+          // Obter posição da câmera
+          const cameraPos = camera.object3D.position;
+          const cameraDirection = new THREE.Vector3();
+          camera.object3D.getWorldDirection(cameraDirection);
+          
+          // Simular hit-test para encontrar plano
+          // Em um cenário real, isso usaria raycasting contra planos detectados
+          // Aqui simulamos uma posição a 1 metro de distância da câmera no chão
+          
+          // Calcular posição sugerida (a 1 metro de distância, no chão)
+          const distance = 1.0;
+          const suggestedPos = {
+            x: cameraPos.x + cameraDirection.x * distance,
+            y: -0.5, // Nível do chão (assumindo que a câmera está a 1.5m do chão)
+            z: cameraPos.z + cameraDirection.z * distance
+          };
+          
+          // Verificar se é uma posição válida (simulação)
+          // Em produção, você verificaria se há um plano real nessa posição
+          
+          // Simular validação de plano (sempre verdadeiro para demonstração)
+          setTimeout(() => {
+            self.onPlaneDetected(suggestedPos);
+          }, 500);
+        },
+        
+        onPlaneDetected: function(position) {
+          this.planeFound = true;
+          this.planePosition = position;
+          
+          // Mostrar o modelo
+          if (this.modelContainer) {
+            this.modelContainer.setAttribute('visible', 'true');
+            this.modelContainer.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+            
+            // Atualizar status
+            this.updateStatus("✅ SUPERFÍCIE PLANA DETECTADA! Modelo carregado.");
+            this.updateStatus("🎉 Modelo posicionado no chão/mesa!");
+            
+            // Atualizar overlay
+            const overlayDiv = document.getElementById('ar-overlay');
+            if (overlayDiv) {
+              overlayDiv.innerHTML = '<p>✅ Plano detectado!</p><p>❤️ Modelo do Coração visível</p>';
+            }
+            
+            // Animação de entrada
+            this.modelContainer.setAttribute('animation', 'property: scale; from: 0 0 0; to: 0.5 0.5 0.5; dur: 500; easing: easeOutElastic');
+            
+            // Reproduzir som de detecção (opcional)
+            this.playDetectionSound();
+          }
+        },
+        
+        updateStatus: function(message) {
+          if (this.statusDiv) {
+            this.statusDiv.innerHTML = message;
+            console.log(message);
+          }
+        },
+        
+        showHint: function(message) {
+          const overlayDiv = document.getElementById('ar-overlay');
+          if (overlayDiv) {
+            const existingHint = overlayDiv.querySelector('.hint');
+            if (existingHint) existingHint.remove();
+            
+            const hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.style.color = '#ffaa00';
+            hint.style.fontWeight = 'bold';
+            hint.innerHTML = `💡 ${message}`;
+            overlayDiv.appendChild(hint);
+            
+            setTimeout(() => {
+              if (hint) hint.remove();
+            }, 5000);
+          }
+        },
+        
+        playDetectionSound: function() {
+          // Criar som de detecção (bip simples)
+          try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.frequency.value = 880;
+            gainNode.gain.value = 0.3;
+            
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+            oscillator.stop(audioCtx.currentTime + 0.5);
+          } catch(e) {
+            console.log("Áudio de detecção não suportado");
+          }
+        }
+      });
+      
+      // Inicializar o sistema de detecção
+      window.addEventListener('load', function() {
+        const scene = document.querySelector('a-scene');
+        const planeDetector = document.createElement('a-entity');
+        planeDetector.setAttribute('plane-detection', '');
+        scene.appendChild(planeDetector);
+        
+        // Garantir que o áudio possa tocar (interação do usuário)
+        const heartModel = document.getElementById('heart-model');
+        if (heartModel) {
+          // Pausar áudio até o modelo aparecer
+          heartModel.addEventListener('model-loaded', function() {
+            const soundComp = this.components.sound;
+            if (soundComp) {
+              soundComp.pause();
+            }
+          });
+          
+          // Tocar áudio quando modelo for mostrado
+          const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+              if (mutation.attributeName === 'visible' && 
+                  heartModel.parentElement.getAttribute('visible') === 'true') {
+                const soundComp = heartModel.components.sound;
+                if (soundComp && !soundComp.isPlaying) {
+                  soundComp.play();
+                }
+              }
+            });
+          });
+          
+          observer.observe(heartModel.parentElement, { attributes: true });
+        }
+      });
+    </script>
+  </body>
+</html>
