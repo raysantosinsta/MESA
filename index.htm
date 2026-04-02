@@ -4,13 +4,8 @@
     <title>AR Coca-Cola - Superfície Plana</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
-    <!-- AR.js -->
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
-    <!-- Gestos -->
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
     <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
@@ -22,8 +17,8 @@
         left: 10px;
         color: white;
         font-family: Arial, sans-serif;
-        background: rgba(0,0,0,0.5);
-        padding: 12px;
+        background: rgba(0,0,0,0.6);
+        padding: 12px 15px;
         border-radius: 8px;
         pointer-events: none;
         z-index: 100;
@@ -32,9 +27,10 @@
   </head>
   <body>
     <div id="ar-overlay">
-      <p>Mova o celular devagar para detectar a superfície<br>
+      <p>Aponte para uma superfície plana bem iluminada<br>
          Pinch → Zoom<br>
-         Dois dedos girando → Rotação</p>
+         Dois dedos girando → Rotação<br>
+         Um dedo arrastando → Mover</p>
     </div>
 
     <a-scene
@@ -48,45 +44,33 @@
 
       <a-entity camera></a-entity>
 
-      <!-- Modelo Coca-Cola - Bem menor -->
+      <!-- Modelo Coca-Cola -->
       <a-entity
         id="coca-model"
         class="tocavel"
         gesture-handler="enabled: true"
         gltf-model="coca.glb"
-        scale="0.1 0.1 0.1"           
-        position="0 0.10 0"          
+        scale="0.08 0.08 0.08"        
+        position="0 0.05 -0.4"        
         rotation="0 0 0"
-        visible="false"
-        sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.8; positional: false"
+        visible="true"
+        sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.7; positional: false"
       >
       </a-entity>
     </a-scene>
 
     <script>
-      const scene = document.querySelector('a-scene');
       const model = document.getElementById('coca-model');
 
-      scene.addEventListener('loaded', () => {
-        console.log('✅ Cena AR carregada');
-
-        scene.addEventListener('ar-hit-test-entered', () => {
-          console.log('✅ Superfície plana detectada!');
-          model.setAttribute('visible', 'true');
-        });
-      });
-
-      // Clique para pausar/tocar o som
+      // Clique no modelo para pausar / tocar o som
       model.addEventListener('click', function() {
-        const soundComp = this.components.sound;
-        if (soundComp) {
-          if (soundComp.isPlaying) {
-            soundComp.pause();
-          } else {
-            soundComp.play();
-          }
+        const sound = this.components.sound;
+        if (sound) {
+          sound.isPlaying ? sound.pause() : sound.play();
         }
       });
+
+      console.log('✅ Cena AR iniciada. Aponte para uma mesa ou chão.');
     </script>
   </body>
 </html>
