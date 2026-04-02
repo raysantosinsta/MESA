@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-  <title>AR Coca-Cola - Redmi 9S</title>
+  <title>AR Coca-Cola - Fixo no Chão</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
@@ -21,7 +21,7 @@
       padding: 15px;
       border-radius: 10px;
       z-index: 100;
-      max-width: 300px;
+      max-width: 320px;
     }
   </style>
 </head>
@@ -29,9 +29,9 @@
   <div id="instructions">
     <p><strong>Como usar:</strong><br><br>
        1. Aponte para o chão ou mesa bem iluminada<br>
-       2. <strong>Arraste o dedo</strong> na tela para mover o círculo<br>
-       3. Quando o círculo estiver no chão → <strong>Toque uma vez</strong> para colocar a Coca<br>
-       4. Depois use Pinch (dois dedos) para zoom e girar</p>
+       2. <strong>Arraste o dedo</strong> para mover o círculo azul<br>
+       3. Quando o círculo estiver bem posicionado → <strong>Toque uma vez</strong> (sem segurar)<br>
+       4. O modelo ficará fixo no lugar!</p>
   </div>
 
   <a-scene
@@ -40,23 +40,21 @@
     gesture-detector
     renderer="alpha: true;"
   >
-    <a-assets>
-      <!-- <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio> -->
-    </a-assets>
+    <a-assets></a-assets>
 
     <a-entity camera></a-entity>
 
-    <!-- Cursor de mira (círculo que você move com o dedo) -->
+    <!-- Cursor de mira (você move com o dedo) -->
     <a-entity
       id="reticle"
-      geometry="primitive: ring; radiusInner: 0.08; radiusOuter: 0.11;"
-      material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.9;"
+      geometry="primitive: ring; radiusInner: 0.07; radiusOuter: 0.10;"
+      material="color: cyan; shader: flat; transparent: true; opacity: 0.9;"
       position="0 0 -0.5"
       rotation="-90 0 0"
       visible="true"
     ></a-entity>
 
-    <!-- Modelo Coca-Cola -->
+    <!-- Modelo Coca-Cola (vai ficar fixo no mundo) -->
     <a-entity
       id="coca-model"
       class="tocavel"
@@ -74,51 +72,59 @@
     const model = document.getElementById('coca-model');
     const reticle = document.getElementById('reticle');
 
-    let isPlaced = false;
+    let modelPlaced = false;
 
     scene.addEventListener('loaded', () => {
-      console.log('✅ AR.js carregado - Arraste o dedo para mover o círculo');
+      console.log('✅ Pronto - Arraste para mover o círculo');
     });
 
-    // Arrastar o dedo move o cursor
-    let lastTouchX = 0;
-    let lastTouchY = 0;
+    // === MOVIMENTAÇÃO DO CURSOR COM O DEDO ===
+    let lastX = 0;
+    let lastY = 0;
 
     scene.addEventListener('touchstart', (e) => {
-      if (isPlaced) return;
-      lastTouchX = e.touches[0].clientX;
-      lastTouchY = e.touches[0].clientY;
+      if (modelPlaced) return;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
     });
 
     scene.addEventListener('touchmove', (e) => {
-      if (isPlaced) return;
-      const deltaX = (e.touches[0].clientX - lastTouchX) * 0.003;
-      const deltaY = (e.touches[0].clientY - lastTouchY) * 0.003;
+      if (modelPlaced) return;
+
+      const deltaX = (e.touches[0].clientX - lastX) * 0.004;
+      const deltaY = (e.touches[0].clientY - lastY) * 0.004;
 
       let pos = reticle.getAttribute('position');
       pos.x += deltaX;
-      pos.y -= deltaY;   // inverte Y para ficar natural
+      pos.y -= deltaY;        // Y invertido para movimento natural
+      pos.z = -0.5;           // mantém distância fixa da câmera
+
       reticle.setAttribute('position', pos);
 
-      lastTouchX = e.touches[0].clientX;
-      lastTouchY = e.touches[0].clientY;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
     });
 
-    // Toque simples = coloca o modelo
+    // === COLOCAR O MODELO ===
     scene.addEventListener('click', () => {
-      if (!isPlaced) {
-        const pos = reticle.getAttribute('position');
-        model.setAttribute('position', `${pos.x} ${pos.y + 0.05} ${pos.z}`);
+      if (!modelPlaced) {
+        const reticlePos = reticle.getAttribute('position');
+        
+        // Posiciona o modelo exatamente onde está o círculo + um pouco acima do chão
+        model.setAttribute('position', `${reticlePos.x} ${reticlePos.y + 0.06} ${reticlePos.z}`);
         model.setAttribute('visible', 'true');
-        isPlaced = true;
-        console.log('✅ Coca-Cola colocada!');
+        
+        modelPlaced = true;
+        console.log('✅ Modelo colocado e fixo no lugar!');
       }
     });
 
-    // Clique no modelo para pausar/tocar som (se quiser usar depois)
+    // Clique no modelo para pausar/tocar som (opcional)
     model.addEventListener('click', function() {
       const sound = this.components.sound;
-      if (sound) sound.isPlaying ? sound.pause() : sound.play();
+      if (sound) {
+        sound.isPlaying ? sound.pause() : sound.play();
+      }
     });
   </script>
 </body>
