@@ -4,10 +4,7 @@
   <title>AR Coca-Cola - Detecção de Chão</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
-  <!-- Gestos (pinch + rotação) -->
   <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
   <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
@@ -19,30 +16,34 @@
       left: 15px;
       color: white;
       font-family: Arial, sans-serif;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.85);
       padding: 15px 18px;
       border-radius: 10px;
       pointer-events: none;
       z-index: 100;
       max-width: 300px;
-      line-height: 1.4;
     }
   </style>
 </head>
 <body>
   <div id="ar-overlay">
-    <p><strong>Aponte para o chão ou mesa bem iluminada</strong><br><br>
-       Toque na tela → Colocar Coca-Cola<br>
-       Pinch com dois dedos → Zoom<br>
-       Girar com dois dedos → Rotação<br>
-       Arrastar com um dedo → Mover</p>
+    <p><strong>Importante:</strong><br>
+       1. Dê permissão da câmera quando pedir<br>
+       2. Aponte devagar para o chão ou mesa (bem iluminada)<br>
+       3. Quando o círculo aparecer → Toque na tela para colocar a Coca<br>
+       Pinch → Zoom | Dois dedos → Rotação</p>
   </div>
 
   <a-scene
     embedded
     gesture-detector
-    webxr="optionalFeatures: hit-test, local-floor;"
-    renderer="logarithmicDepthBuffer: true;"
+    renderer="alpha: true;"
+    webxr="mode: ar; 
+           requiredFeatures: hit-test; 
+           optionalFeatures: local-floor; 
+           referenceSpaceType: local;"
+    xr-mode-ui="enabled: true; XRMode: ar"
+    vr-mode-ui="enabled: false"
   >
     <a-assets>
       <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio>
@@ -51,10 +52,10 @@
     <!-- Camera -->
     <a-entity camera></a-entity>
 
-    <!-- Cursor de mira (reticle) - aparece quando detecta superfície -->
+    <!-- Cursor de mira (círculo) -->
     <a-entity
       id="reticle"
-      geometry="primitive: ring; radiusInner: 0.07; radiusOuter: 0.10;"
+      geometry="primitive: ring; radiusInner: 0.06; radiusOuter: 0.09;"
       material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.9;"
       position="0 0 -0.5"
       rotation="-90 0 0"
@@ -80,38 +81,34 @@
     const model = document.getElementById('coca-model');
     const reticle = document.getElementById('reticle');
 
-    let hitTestEnabled = true;
-
     scene.addEventListener('loaded', () => {
-      console.log('✅ Cena carregada - Iniciando detecção de superfície...');
+      console.log('✅ Cena AR carregada. Aguardando detecção de superfície...');
     });
 
-    // Hit-test automático (WebXR)
+    // Quando detectar superfície plana
     scene.addEventListener('ar-hit-test-entered', () => {
       reticle.setAttribute('visible', 'true');
-      console.log('✅ Superfície detectada! Toque na tela para colocar.');
+      console.log('✅ Superfície detectada! Toque na tela.');
     });
 
     scene.addEventListener('ar-hit-test-exited', () => {
       reticle.setAttribute('visible', 'false');
     });
 
-    // Ao tocar na tela → coloca o modelo
+    // Toque na tela para colocar o modelo
     scene.addEventListener('click', () => {
       if (model.getAttribute('visible') === 'false' && reticle.getAttribute('visible') === 'true') {
-        const reticlePos = reticle.getAttribute('position');
-        model.setAttribute('position', `${reticlePos.x} ${reticlePos.y + 0.03} ${reticlePos.z}`);
+        const pos = reticle.getAttribute('position');
+        model.setAttribute('position', `${pos.x} ${pos.y + 0.04} ${pos.z}`);
         model.setAttribute('visible', 'true');
-        console.log('✅ Coca-Cola colocada no chão!');
+        console.log('✅ Modelo colocado!');
       }
     });
 
-    // Clique no modelo para pausar/tocar som
-    model.addEventListener('click', function () {
+    // Clique no modelo → pausar/tocar som
+    model.addEventListener('click', function() {
       const sound = this.components.sound;
-      if (sound) {
-        sound.isPlaying ? sound.pause() : sound.play();
-      }
+      if (sound) sound.isPlaying ? sound.pause() : sound.play();
     });
   </script>
 </body>
