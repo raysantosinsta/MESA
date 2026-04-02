@@ -1,102 +1,102 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>Coca-Cola AR - Sem Marcador</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <head>
+    <title>AR com Coca-Cola - Superfície Plana</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 
-  <!-- AR.js -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <!-- AR.js (versão com suporte a hit-test/plane) -->
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-    }
-    
-    .info {
-      position: absolute;
-      bottom: 20px;
-      left: 0;
-      right: 0;
-      text-align: center;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 12px;
-      font-family: Arial;
-      font-size: 14px;
-      z-index: 10;
-      pointer-events: none;
-    }
-    
-    .back-btn {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 25px;
-      font-size: 14px;
-      cursor: pointer;
-      z-index: 10;
-      font-family: Arial;
-    }
-  </style>
-</head>
-<body>
+    <!-- Gestos (pinch zoom + rotação) -->
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
-  <div class="info">
-    🥤 <strong>Coca-Cola 3D</strong> → O modelo está fixo no centro da tela
-  </div>
-  
-  <button class="back-btn" onclick="history.back()">← Voltar</button>
+    <style>
+      body { margin: 0; overflow: hidden; }
+      #ar-overlay {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-family: Arial, sans-serif;
+        background: rgba(0,0,0,0.4);
+        padding: 10px;
+        border-radius: 8px;
+        pointer-events: none;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ar-overlay">
+      <p>Mova o celular devagar para detectar a superfície plana<br>
+         Pinch → Zoom<br>
+         Dois dedos girando → Rotação</p>
+    </div>
 
-  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-    
-    <!-- Câmera -->
-    <a-entity camera></a-entity>
-    
-    <!-- Luzes -->
-    <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
-    <a-entity light="type: directional; intensity: 1.2;" position="2 3 2"></a-entity>
-    
-    <!-- Modelo Coca-Cola - SEM marcador, visível diretamente -->
-    <a-entity
-      gltf-model="url(coca.glb)"
-      scale="0.5 0.5 0.5"
-      position="0 0 -1.5"
-      rotation="0 180 0"
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+      gesture-detector
     >
-      <!-- Animação de rotação suave -->
-      <a-animation
-        attribute="rotation"
-        from="0 0 0"
-        to="0 360 0"
-        dur="15000"
-        easing="linear"
-        repeat="indefinite">
-      </a-animation>
-    </a-entity>
-    
-  </a-scene>
+      <!-- Assets -->
+      <a-assets>
+        <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio>
+      </a-assets>
 
-  <script>
-    console.log('🎯 AR Iniciado - Coca-Cola 3D visível!');
-    
-    // Verificar se o modelo carregou
-    const model = document.querySelector('[gltf-model="url(coca.glb)"]');
-    if (model) {
-      model.addEventListener('model-loaded', () => {
-        console.log('✅ Coca-Cola carregada!');
+      <!-- Camera -->
+      <a-entity camera></a-entity>
+
+      <!-- Modelo que aparece na superfície plana -->
+      <a-entity
+        id="coca-model"
+        class="tocavel"
+        gesture-handler="enabled: true"
+        gltf-model="coca.glb"         
+        scale="0.5 0.5 0.5"            
+        position="0 0.1 0"             
+        rotation="0 0 0"
+        visible="false"                
+        sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.8; positional: false"
+      >
+      </a-entity>
+    </a-scene>
+
+    <script>
+      const scene = document.querySelector('a-scene');
+      const model = document.getElementById('coca-model');
+
+      // Quando a cena AR estiver pronta
+      scene.addEventListener('loaded', () => {
+        console.log('AR Scene carregada');
+
+        // Hit-test para detectar superfície plana (funciona melhor em dispositivos com ARCore/ARKit)
+        scene.addEventListener('ar-hit-test-entered', () => {
+          console.log('Superfície plana detectada!');
+          model.setAttribute('visible', 'true');
+        });
+
+        // Opcional: esconder novamente se perder o tracking (pouco comum)
+        scene.addEventListener('ar-hit-test-exited', () => {
+          console.log('Perdeu a superfície');
+          // model.setAttribute('visible', 'false');
+        });
       });
-      model.addEventListener('model-error', () => {
-        alert('Erro: Arquivo coca.glb não encontrado!');
+
+      // Clique no modelo para pausar/tocar o som (opcional)
+      model.addEventListener('click', function () {
+        const soundComp = this.components.sound;
+        if (soundComp) {
+          if (soundComp.isPlaying) {
+            soundComp.pause();
+          } else {
+            soundComp.play();
+          }
+        }
       });
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>
