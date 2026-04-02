@@ -1,65 +1,60 @@
 <!doctype html>
 <html>
 <head>
-  <title>AR Coca-Cola - Detecção de Chão</title>
+  <title>AR Coca-Cola - Redmi 9S</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-detector.js"></script>
   <script src="https://raw.githack.com/fcor/arjs-gestures/master/gesture-handler.js"></script>
 
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
-    #ar-overlay {
+    #instructions {
       position: absolute;
       top: 15px;
       left: 15px;
       color: white;
       font-family: Arial, sans-serif;
-      background: rgba(0,0,0,0.85);
-      padding: 15px 18px;
+      background: rgba(0,0,0,0.8);
+      padding: 15px;
       border-radius: 10px;
-      pointer-events: none;
       z-index: 100;
       max-width: 300px;
     }
   </style>
 </head>
 <body>
-  <div id="ar-overlay">
-    <p><strong>Importante:</strong><br>
-       1. Dê permissão da câmera quando pedir<br>
-       2. Aponte devagar para o chão ou mesa (bem iluminada)<br>
-       3. Quando o círculo aparecer → Toque na tela para colocar a Coca<br>
-       Pinch → Zoom | Dois dedos → Rotação</p>
+  <div id="instructions">
+    <p><strong>Instruções (Redmi 9S):</strong><br><br>
+       1. Aponte a câmera para o chão ou mesa bem iluminada<br>
+       2. Toque na tela para colocar a Coca-Cola<br>
+       3. Pinch → Zoom<br>
+       4. Dois dedos girando → Rotação</p>
   </div>
 
   <a-scene
     embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best; videoTexture: true;"
     gesture-detector
     renderer="alpha: true;"
-    webxr="mode: ar; 
-           requiredFeatures: hit-test; 
-           optionalFeatures: local-floor; 
-           referenceSpaceType: local;"
-    xr-mode-ui="enabled: true; XRMode: ar"
-    vr-mode-ui="enabled: false"
   >
     <a-assets>
-      <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio>
+      <!-- Remova ou comente o áudio se não tiver o arquivo -->
+      <!-- <audio id="heart-sound" src="coracao-som.mp3" preload="auto"></audio> -->
     </a-assets>
 
-    <!-- Camera -->
     <a-entity camera></a-entity>
 
     <!-- Cursor de mira (círculo) -->
     <a-entity
       id="reticle"
-      geometry="primitive: ring; radiusInner: 0.06; radiusOuter: 0.09;"
-      material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.9;"
-      position="0 0 -0.5"
+      geometry="primitive: ring; radiusInner: 0.07; radiusOuter: 0.10;"
+      material="color: #00ffcc; shader: flat; transparent: true; opacity: 0.85;"
+      position="0 0 -0.6"
       rotation="-90 0 0"
-      visible="false"
+      visible="true"
     ></a-entity>
 
     <!-- Modelo Coca-Cola -->
@@ -72,7 +67,7 @@
       position="0 0.05 0"
       rotation="0 0 0"
       visible="false"
-      sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.7; positional: false"
+      <!-- sound="src: #heart-sound; autoplay: true; loop: true; volume: 0.7;" -->
     ></a-entity>
   </a-scene>
 
@@ -82,22 +77,12 @@
     const reticle = document.getElementById('reticle');
 
     scene.addEventListener('loaded', () => {
-      console.log('✅ Cena AR carregada. Aguardando detecção de superfície...');
+      console.log('✅ AR.js carregado no Redmi 9S - Toque na tela para colocar');
     });
 
-    // Quando detectar superfície plana
-    scene.addEventListener('ar-hit-test-entered', () => {
-      reticle.setAttribute('visible', 'true');
-      console.log('✅ Superfície detectada! Toque na tela.');
-    });
-
-    scene.addEventListener('ar-hit-test-exited', () => {
-      reticle.setAttribute('visible', 'false');
-    });
-
-    // Toque na tela para colocar o modelo
+    // Toque na tela = coloca o modelo na posição do cursor
     scene.addEventListener('click', () => {
-      if (model.getAttribute('visible') === 'false' && reticle.getAttribute('visible') === 'true') {
+      if (model.getAttribute('visible') === 'false') {
         const pos = reticle.getAttribute('position');
         model.setAttribute('position', `${pos.x} ${pos.y + 0.04} ${pos.z}`);
         model.setAttribute('visible', 'true');
@@ -105,7 +90,7 @@
       }
     });
 
-    // Clique no modelo → pausar/tocar som
+    // Clique no modelo para pausar/tocar som (se quiser ativar depois)
     model.addEventListener('click', function() {
       const sound = this.components.sound;
       if (sound) sound.isPlaying ? sound.pause() : sound.play();
